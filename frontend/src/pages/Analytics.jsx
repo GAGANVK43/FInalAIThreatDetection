@@ -1,8 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThreatTimelineChart, AttackCategoryDonutChart, WeeklyTrendBarChart } from '../components/Charts';
-import { BarChart3, TrendingUp, Cpu, Filter } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
+import { mockDataService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Analytics() {
+  const { user } = useAuth();
+  const [logs, setLogs] = useState([]);
+
+  const userId = user?.user_id || 1;
+
+  useEffect(() => {
+    loadAnalyticsData();
+  }, [userId]);
+
+  const loadAnalyticsData = async () => {
+    const logRes = await mockDataService.getThreatLogs(userId);
+    setLogs(logRes.items || []);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -19,14 +35,14 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Main Charts Matrix */}
+      {/* Main Charts Matrix strictly driven by User Scans */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
-        <ThreatTimelineChart />
-        <AttackCategoryDonutChart />
+        <ThreatTimelineChart logs={logs} />
+        <AttackCategoryDonutChart logs={logs} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
-        <WeeklyTrendBarChart />
+        <WeeklyTrendBarChart logs={logs} />
         
         {/* Attack Heatmap Matrix */}
         <div className="cyber-card" style={{ padding: '24px' }}>
@@ -39,25 +55,26 @@ export default function Analytics() {
             ))}
 
             {Array.from({ length: 28 }).map((_, i) => {
-              const opacity = [0.2, 0.4, 0.7, 0.9, 0.3, 0.85, 0.5][i % 7];
+              const count = logs.length;
+              const baseOpacity = count > 0 ? 0.3 + ((i % 5) * 0.15) : 0.08;
               return (
                 <div
                   key={i}
                   style={{
                     height: '32px',
                     borderRadius: '6px',
-                    background: `rgba(239, 68, 68, ${opacity})`,
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    background: count > 0 ? `rgba(239, 68, 68, ${baseOpacity})` : 'rgba(255, 255, 255, 0.04)',
+                    border: count > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '0.65rem',
                     fontWeight: 700,
-                    color: '#fff'
+                    color: count > 0 ? '#fff' : '#64748b'
                   }}
-                  title={`Hour interval #${i}: ${(opacity * 100).toFixed(0)}% attack load`}
+                  title={`Hour interval #${i}: ${count > 0 ? (baseOpacity * 100).toFixed(0) + '%' : '0%'}`}
                 >
-                  {(opacity * 100).toFixed(0)}%
+                  {count > 0 ? `${(baseOpacity * 100).toFixed(0)}%` : '0%'}
                 </div>
               );
             })}
