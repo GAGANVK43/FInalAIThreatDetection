@@ -1,0 +1,106 @@
+{
+    "accuracy": 0.198,
+    "precision": 0.1972,
+    "recall": 0.198,
+    "f1_score": 0.1975,
+    "roc_auc": 0.4967,
+    "confusion_matrix": [
+        [
+            127,
+            98,
+            129,
+            120,
+            117
+        ],
+        [
+            127,
+            98,
+            134,
+            111,
+            125
+        ],
+        [
+            119,
+            118,
+            122,
+            128,
+            125
+        ],
+        [
+            121,
+            125,
+            119,
+            148,
+            96
+        ],
+        [
+            103,
+            121,
+            137,
+            133,
+            99
+        ]
+    ],
+    "target_classes": [
+        "DDoS",
+        "Insider Threat",
+        "Malware",
+        "Phishing",
+        "Ransomware"
+    ],
+    "feature_importance": {
+        "ua_length": 0.1209532842040062,
+        "is_mozilla": 0.11695460975170135,
+        "data_exfil": 0.14466185867786407,
+        "src_first_octet": 0.12391003221273422,
+        "src_last_octet": 0.12468038499355316,
+        "dst_first_octet": 0.12527333199977875,
+        "dst_last_octet": 0.1291704922914505,
+        "severity_score": 0.11439599841833115
+    },
+    "classification_report": {
+        "DDoS": {
+            "precision": 0.21273031825795644,
+            "recall": 0.21489001692047377,
+            "f1-score": 0.2138047138047138,
+            "support": 591.0
+        },
+        "Insider Threat": {
+            "precision": 0.175,
+            "recall": 0.16470588235294117,
+            "f1-score": 0.1696969696969697,
+            "support": 595.0
+        },
+        "Malware": {
+            "precision": 0.19032761310452417,
+            "recall": 0.19934640522875818,
+            "f1-score": 0.19473264166001597,
+            "support": 612.0
+        },
+        "Phishing": {
+            "precision": 0.23125,
+            "recall": 0.24302134646962234,
+            "f1-score": 0.23698959167333866,
+            "support": 609.0
+        },
+        "Ransomware": {
+            "precision": 0.17615658362989323,
+            "recall": 0.16694772344013492,
+            "f1-score": 0.17142857142857143,
+            "support": 593.0
+        },
+        "accuracy": 0.198,
+        "macro avg": {
+            "precision": 0.1970929029984748,
+            "recall": 0.1977822748823861,
+            "f1-score": 0.19733049765272193,
+            "support": 3000.0
+        },
+        "weighted avg": {
+            "precision": 0.1972070738009826,
+            "recall": 0.198,
+            "f1-score": 0.19749615457013958,
+            "support": 3000.0
+        }
+    }
+}

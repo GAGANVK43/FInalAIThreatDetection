@@ -12,13 +12,17 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 from backend.app.database.db import get_db, init_db, hash_password
+from backend.app.api.endpoints import router as ml_router
+from backend.app.services.threat_service import ThreatDetectionService
+from backend.app.ml.train import XGBoostTrainer
 
 app = FastAPI(
-    title="AI Threat Detection Engine",
-    description="User Profile & Password-Protected Threat Intelligence Platform",
-    version="5.0.0"
+    title="AI Threat Detection Platform",
+    description="Production XGBoost Threat Analytics & User Session Management API",
+    version="2.0.0"
 )
 
+# Enable CORS for Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,20 +31,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_PATH = os.path.join(BASE_DIR, "backend", "app", "ai", "saved_model.pkl")
+# Include Modular ML Router (/predict, /batch-predict, /model-info, /model-metrics, /health)
+app.include_router(ml_router)
 
-ml_artifact = None
+threat_service = ThreatDetectionService()
 
 @app.on_event("startup")
 def startup():
     init_db()
-    global ml_artifact
-    if os.path.exists(MODEL_PATH):
+    # Check if XGBoost model is trained, if not train it automatically
+    model_file = os.path.join(os.path.dirname(__file__), "ml", "model", "xgboost_model.pkl")
+    if not os.path.exists(model_file):
         try:
-            ml_artifact = joblib.load(MODEL_PATH)
+            print("[Backend Startup] Pre-trained XGBoost model not found. Initializing pipeline training...")
+            trainer = XGBoostTrainer()
+            trainer.train_pipeline()
         except Exception as e:
-            print(f"[Backend Warning] Could not load model: {e}")
+            print(f"[Backend Warning] Auto-training failed: {e}")
 
 # Validation Helpers
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -64,7 +71,7 @@ def is_strong_password(password: str) -> bool:
         return False
     return True
 
-# Pydantic Schemas
+# Pydantic Request Models for User Session
 class RegisterRequest(BaseModel):
     identifier: str
     login_type: str
@@ -83,131 +90,24 @@ class UserThreatScanRequest(BaseModel):
     source_ip: Optional[str] = "192.168.1.45"
     destination_ip: Optional[str] = "10.0.0.1"
 
-# Threat Analytics Logic
-SUSPICIOUS_TLDS = ['.xyz', '.cc', '.top', '.tk', '.ru', '.biz', '.info', '.work', '.click', '.gq', '.ml', '.cf', '.ga']
-PHISHING_KEYWORDS = ['login', 'verify', 'account', 'bank', 'update', 'paypal', 'secure', 'signin', 'credential', 'password', 'wallet', 'suspend', 'confirm', 'billing']
-MALWARE_EXTENSIONS = ['.exe', '.scr', '.vbs', '.bat', '.apk', '.js', '.ps1', '.zip', '.rar', '.iso', '.dmg', '.sh']
-URGENCY_PHRASES = ['urgent', 'immediately', 'suspended', 'account blocked', 'verify now', 'action required', 'unauthorized access', 'security breach', 'won a prize']
-SQLI_PATTERNS = [r"select\s+.*\s+from", r"union\s+select", r"drop\s+table", r"or\s+'1'='1'", r"or\s+1=1"]
-
-def analyze_url(url_str: str) -> Dict[str, Any]:
-    url_str_clean = url_str.strip()
-    if not (url_str_clean.startswith("http://") or url_str_clean.startswith("https://")):
-        url_str_clean = "http://" + url_str_clean
-
-    parsed = urlparse(url_str_clean)
-    hostname = (parsed.hostname or "").lower()
-    path = (parsed.path or "").lower()
-    query = (parsed.query or "").lower()
-    full_url = url_str_clean.lower()
-
-    indicators = []
-    threat_category = "Legitimate Link"
-    base_risk = 10
-
-    if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", hostname):
-        indicators.append("Host is a raw IP address instead of domain name")
-        base_risk += 35
-
-    for tld in SUSPICIOUS_TLDS:
-        if hostname.endswith(tld):
-            indicators.append(f"High-risk untrusted TLD: '{tld}'")
-            base_risk += 30
-            break
-
-    for ext in MALWARE_EXTENSIONS:
-        if path.endswith(ext) or ext in query:
-            indicators.append(f"Executable malware payload extension: '{ext}'")
-            threat_category = "Malware"
-            base_risk += 45
-            break
-
-    phish_matches = [kw for kw in PHISHING_KEYWORDS if kw in full_url]
-    if phish_matches:
-        indicators.append(f"Phishing keyword lures found: {', '.join(phish_matches[:3])}")
-        base_risk += 35
-        if threat_category != "Malware":
-            threat_category = "Phishing"
-
-    if hostname.count('.') > 3:
-        indicators.append("Deceptive nested subdomain spoofing")
-        base_risk += 15
-
-    for pat in SQLI_PATTERNS:
-        if re.search(pat, query):
-            indicators.append("SQL Injection attack payload detected in query string")
-            threat_category = "SQL Injection"
-            base_risk += 40
-            break
-
-    risk_score = min(99, max(5, base_risk))
-    if risk_score > 70 and threat_category == "Legitimate Link":
-        threat_category = "Phishing"
-
+# ROOT ENDPOINT
+@app.get("/")
+def read_root():
     return {
-        "detected_type": "URL Link",
-        "category": threat_category if risk_score > 25 else "Safe / Legitimate Link",
-        "risk_score": risk_score,
-        "indicators": indicators if indicators else ["No threat indicators found in URL."],
-        "confidence": 94.5 if risk_score > 50 else 98.5
+        "status": "online",
+        "service": "AI Threat Detection Engine",
+        "model_type": "XGBoost Classifier",
+        "version": "2.0.0",
+        "endpoints": {
+            "predict": "/predict",
+            "batch_predict": "/batch-predict",
+            "model_info": "/model-info",
+            "model_metrics": "/model-metrics",
+            "health": "/health"
+        }
     }
 
-def analyze_message(msg_str: str) -> Dict[str, Any]:
-    msg_lower = msg_str.lower()
-    indicators = []
-    threat_category = "Normal Message"
-    base_risk = 10
-
-    found_urgency = [phrase for phrase in URGENCY_PHRASES if phrase in msg_lower]
-    found_phish_kw = [kw for kw in PHISHING_KEYWORDS if kw in msg_lower]
-
-    if found_urgency or found_phish_kw:
-        threat_category = "Phishing"
-        base_risk += 40
-        if found_urgency:
-            indicators.append(f"Urgent social engineering pressure: '{found_urgency[0]}'")
-        if found_phish_kw:
-            indicators.append(f"Credential harvesting trigger words: {', '.join(found_phish_kw[:3])}")
-
-    urls = re.findall(r'https?://[^\s]+', msg_str)
-    if urls:
-        indicators.append(f"Contains external link: {urls[0]}")
-        url_res = analyze_url(urls[0])
-        base_risk += int(url_res['risk_score'] * 0.5)
-        if url_res['risk_score'] > 60:
-            threat_category = url_res['category']
-            indicators.extend(url_res['indicators'])
-
-    for ext in MALWARE_EXTENSIONS:
-        if ext in msg_lower:
-            indicators.append(f"Mentions executable download attachment ('{ext}')")
-            threat_category = "Malware"
-            base_risk += 35
-            break
-
-    for pat in SQLI_PATTERNS:
-        if re.search(pat, msg_lower):
-            indicators.append("Malicious SQL syntax payload pattern detected")
-            threat_category = "SQL Injection"
-            base_risk += 45
-            break
-
-    if len(msg_str) > 2000 or msg_lower.count("get ") > 10:
-        indicators.append("Excessive payload repetition / HTTP flood signature")
-        threat_category = "DDoS"
-        base_risk += 40
-
-    risk_score = min(99, max(5, base_risk))
-
-    return {
-        "detected_type": "Message Text",
-        "category": threat_category if risk_score > 25 else "Safe / Clean Message",
-        "risk_score": risk_score,
-        "indicators": indicators if indicators else ["Message content appears clean with no threat indicators."],
-        "confidence": 92.0 if risk_score > 50 else 97.5
-    }
-
-# REGISTER WITH STRICT VALIDATIONS
+# AUTH ENDPOINTS
 @app.post("/api/auth/register")
 def register_user(payload: RegisterRequest):
     identifier = payload.identifier.strip().lower()
@@ -255,7 +155,6 @@ def register_user(payload: RegisterRequest):
         }
     }
 
-# LOGIN
 @app.post("/api/auth/login")
 def login_user(payload: LoginRequest):
     identifier = payload.identifier.strip().lower()
@@ -290,7 +189,7 @@ def login_user(payload: LoginRequest):
         }
     }
 
-# GET USER PROFILE
+# USER PROFILE
 @app.get("/api/user/profile")
 def get_user_profile(user_id: int):
     conn = get_db()
@@ -350,39 +249,37 @@ def get_user_profile(user_id: int):
         "recent_scans": recent_scans
     }
 
-# USER PREDICT & STORE THREAT
+# USER PREDICT (Invokes XGBoost Engine & Stores to SQLite)
 @app.post("/api/predict")
 def predict_and_store_threat(payload: UserThreatScanRequest):
     input_str = (payload.input_text or "").strip()
     if not input_str:
         raise HTTPException(status_code=400, detail="Input text is required")
 
-    is_url = input_str.startswith("http://") or input_str.startswith("https://") or ("." in input_str and "/" in input_str and " " not in input_str)
-
-    if is_url or payload.input_type == "url":
-        analysis = analyze_url(input_str)
-    else:
-        analysis = analyze_message(input_str)
-
-    category = analysis["category"]
-    risk_score = analysis["risk_score"]
-    confidence = analysis["confidence"]
-    indicators = analysis["indicators"]
-
-    severity_label = "Critical" if risk_score > 75 else ("High" if risk_score > 50 else ("Medium" if risk_score > 25 else "Low"))
-
-    actions_map = {
-        "Phishing": ["Block URL domain in Email & DNS Filter", "Revoke compromised session tokens", "Issue User Security Alert"],
-        "Malware": ["Quarantine executable file payload", "Isolate host computer from local network", "Run EDR Deep Endpoint Scan"],
-        "DDoS": ["Enable Cloudflare/AWS Shield Rate Limiting", "Null-route offending Source IP", "Scale Server Load Balancer"],
-        "SQL Injection": ["Enable Web Application Firewall (WAF) Rule", "Sanitize SQL parameters", "Block IP on Perimeter Firewall"]
+    data_dict = {
+        "input_text": input_str,
+        "User Agent": input_str,
+        "Source IP": payload.source_ip,
+        "Destination IP": payload.destination_ip,
+        "Attack Severity": "High",
+        "Data Exfiltrated": False
     }
 
-    recommended_actions = actions_map.get(
-        category.replace(" Safe / Legitimate Link", "").replace(" Safe / Clean Message", "").strip(),
-        ["Monitor traffic stream", "Log event for security audit"]
-    )
+    # Execute XGBoost Prediction & SHAP
+    xgb_res = threat_service.predict_threat(data_dict)
 
+    category = xgb_res["attack_type"]
+    risk_score = xgb_res["risk_score"]
+    confidence = xgb_res["confidence"]
+    recommended_actions = xgb_res["recommended_actions"]
+    severity_label = "Critical" if risk_score > 75 else ("High" if risk_score > 50 else ("Medium" if risk_score > 25 else "Low"))
+
+    indicators = [f"XGBoost Model Confidence: {confidence}%", f"Attack Vector Classified: {category}"]
+    for k, v in xgb_res.get("shap_explanation", {}).items():
+        if abs(v) > 0.05:
+            indicators.append(f"SHAP feature impact '{k}': {v}")
+
+    # Store in User's DB History
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -393,7 +290,7 @@ def predict_and_store_threat(payload: UserThreatScanRequest):
     """, (
         payload.user_id,
         input_str,
-        analysis["detected_type"],
+        "URL / Text Payload",
         category,
         risk_score,
         severity_label,
@@ -409,18 +306,21 @@ def predict_and_store_threat(payload: UserThreatScanRequest):
     return {
         "scan_id": scan_id,
         "input_analyzed": input_str,
-        "input_type": analysis["detected_type"],
+        "input_type": "URL / Text Payload",
         "predicted_attack": category,
         "confidence": confidence,
         "risk_score": risk_score,
         "severity": severity_label,
         "indicators": indicators,
         "recommended_actions": recommended_actions,
+        "probabilities": xgb_res.get("probabilities", {}),
+        "shap_explanation": xgb_res.get("shap_explanation", {}),
         "source_ip": payload.source_ip,
         "destination_ip": payload.destination_ip,
         "timestamp": "Just now"
     }
 
+# USER DASHBOARD STATS
 @app.get("/api/user/stats")
 def get_user_stats(user_id: int):
     conn = get_db()
@@ -456,6 +356,7 @@ def get_user_stats(user_id: int):
         "severity_distribution": severity_distribution
     }
 
+# USER LOG HISTORY TABLE
 @app.get("/api/user/logs")
 def get_user_logs(user_id: int, page: int = 1, limit: int = 10):
     conn = get_db()
