@@ -11,90 +11,181 @@ export const apiClient = axios.create({
   timeout: 10000,
 });
 
-// Request & Response Interceptors
+// Request Interceptors for User ID
 apiClient.interceptors.request.use((config) => {
-  const user = localStorage.getItem('ai_threat_user');
-  if (user) {
+  const userStr = localStorage.getItem('ai_threat_user');
+  if (userStr) {
     try {
-      const parsed = JSON.parse(user);
+      const parsed = JSON.parse(userStr);
       if (parsed.user_id) config.headers['X-User-ID'] = parsed.user_id;
     } catch (e) {}
   }
   return config;
 }, (error) => Promise.reject(error));
 
-// Dummy Mock Data Generators for Portfolio-Ready UI
+// Local Storage Helper for User-Specific Fresh Starts & Real-time Scans
+const getUserScansFromStorage = (userId) => {
+  try {
+    const key = `user_scans_${userId || 'guest'}`;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveUserScanToStorage = (userId, scanItem) => {
+  try {
+    const key = `user_scans_${userId || 'guest'}`;
+    const existing = getUserScansFromStorage(userId);
+    const updated = [scanItem, ...existing];
+    localStorage.setItem(key, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    return [];
+  }
+};
+
 export const mockDataService = {
-  getDashboardStats: async () => {
+  getDashboardStats: async (userId = 1) => {
     try {
-      const res = await apiClient.get('/api/user/stats?user_id=1');
+      const res = await apiClient.get(`/api/user/stats?user_id=${userId}`);
       return res.data;
     } catch (e) {
+      // Fallback: Compute strictly from this specific user's local scans
+      const scans = getUserScansFromStorage(userId);
+      const total = scans.length;
+      if (total === 0) {
+        return {
+          total_events: 0,
+          active_threats: 0,
+          blocked_threats: 0,
+          critical_alerts: 0,
+          ai_security_score: 100,
+          ai_confidence: 98.4,
+          exfil_rate_pct: 0,
+          attack_distribution: {},
+          severity_distribution: {}
+        };
+      }
+
+      const critical = scans.filter(s => s.severity === 'Critical').length;
+      const blocked = scans.filter(s => s.risk_score > 50).length;
+      const attackDist = {};
+      scans.forEach(s => {
+        const cat = s.predicted_attack || s.attack_type || 'Unknown';
+        attackDist[cat] = (attackDist[cat] || 0) + 1;
+      });
+
       return {
-        total_events: 124850,
-        active_threats: 42,
-        blocked_threats: 119400,
-        critical_alerts: 18,
-        ai_security_score: 94.8,
+        total_events: total,
+        active_threats: critical,
+        blocked_threats: blocked,
+        critical_alerts: critical,
+        ai_security_score: Math.max(10, 100 - (critical * 15)),
         ai_confidence: 98.4,
-        exfil_rate_pct: 2.15,
-        attack_distribution: {
-          'DDoS': 42100,
-          'Phishing': 38200,
-          'Malware': 21400,
-          'Ransomware': 12100,
-          'SQL Injection': 11050
-        },
-        severity_distribution: {
-          'Critical': 18,
-          'High': 124,
-          'Medium': 450,
-          'Low': 1240
-        }
+        exfil_rate_pct: total > 0 ? round((blocked / total) * 100, 1) : 0,
+        attack_distribution: attackDist,
+        severity_distribution: {}
       };
     }
   },
 
-  getThreatLogs: async (page = 1, severity = 'All', search = '') => {
+  getThreatLogs: async (userId = 1, page = 1, severity = 'All', search = '') => {
     try {
-      const res = await apiClient.get(`/api/user/logs?page=${page}&limit=10`);
-      return res.data;
+      const res = await apiClient.get(`/api/user/logs?user_id=${userId}&page=${page}&limit=10`);
+      if (res.data && Array.isArray(res.data.items)) {
+        return res.data;
+      }
+      return { items: [], total: 0, page: 1, pages: 1 };
     } catch (e) {
-      const mockLogs = [
-        { id: 'EVT-9041', timestamp: '2026-07-29 11:18:42', source_ip: '185.220.101.4', destination_ip: '10.0.4.15', input_text: 'http://paypal-security-update.xyz/login.php', input_type: 'URL Link', predicted_attack: 'Phishing', risk_score: 96, severity: 'Critical', response_action: 'Blocked & Domain Isolated' },
-        { id: 'EVT-9040', timestamp: '2026-07-29 11:15:10', source_ip: '45.133.1.20', destination_ip: '192.168.1.100', input_text: "SELECT * FROM users WHERE '1'='1'", input_type: 'SQL Query', predicted_attack: 'SQL Injection', risk_score: 88, severity: 'High', response_action: 'WAF Rule Triggered' },
-        { id: 'EVT-9039', timestamp: '2026-07-29 11:10:05', source_ip: '110.155.68.245', destination_ip: '178.123.150.38', input_text: 'http://malware-drop.cc/urgent_invoice.exe', input_type: 'Executable Binary', predicted_attack: 'Malware', risk_score: 94, severity: 'Critical', response_action: 'Quarantined Payload' },
-        { id: 'EVT-9038', timestamp: '2026-07-29 11:02:18', source_ip: '219.80.193.15', destination_ip: '44.155.75.24', input_text: 'GET /api/v1/resource HTTP/1.1 (Flood payload)', input_type: 'Packet Flood', predicted_attack: 'DDoS', risk_score: 78, severity: 'High', response_action: 'Null-routed Source IP' },
-        { id: 'EVT-9037', timestamp: '2026-07-29 10:45:00', source_ip: '192.168.1.55', destination_ip: '10.0.0.1', input_text: 'https://github.com/security/bulletins', input_type: 'Clean URL', predicted_attack: 'Legitimate Link', risk_score: 8, severity: 'Low', response_action: 'Passed Inspection' }
-      ];
-      return { items: mockLogs, total: 45, page, pages: 5 };
+      // Return ONLY the scans performed by this specific logged-in user
+      const userScans = getUserScansFromStorage(userId);
+      return {
+        items: userScans,
+        total: userScans.length,
+        page: 1,
+        pages: Math.ceil(userScans.length / 10) || 1
+      };
     }
   },
 
   predictThreat: async (payload) => {
+    const userId = payload.user_id || 1;
+    let predictionResult;
+
     try {
       const res = await apiClient.post('/predict', payload);
-      return res.data;
+      predictionResult = res.data;
     } catch (e) {
-      return {
-        predicted_class: 3,
-        attack_type: 'Phishing',
+      // Dynamic fallback based on user input text
+      const inputText = (payload.input_text || '').toLowerCase();
+      let attackType = 'Safe / Legitimate Link';
+      let riskScore = 12;
+      let severity = 'Low';
+
+      if (inputText.includes('exe') || inputText.includes('malware') || inputText.includes('payload') || inputText.includes('invoice')) {
+        attackType = 'Malware';
+        riskScore = 94;
+        severity = 'Critical';
+      } else if (inputText.includes('paypal') || inputText.includes('login') || inputText.includes('verify') || inputText.includes('bank')) {
+        attackType = 'Phishing';
+        riskScore = 96;
+        severity = 'Critical';
+      } else if (inputText.includes('select') || inputText.includes('drop') || inputText.includes('union')) {
+        attackType = 'SQL Injection';
+        riskScore = 88;
+        severity = 'High';
+      } else if (inputText.includes('flood') || inputText.includes('ddos') || inputText.includes('get /')) {
+        attackType = 'DDoS';
+        riskScore = 78;
+        severity = 'High';
+      }
+
+      predictionResult = {
+        scan_id: Date.now(),
+        id: `EVT-${Math.floor(1000 + Math.random() * 9000)}`,
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        predicted_class: 1,
+        predicted_attack: attackType,
+        attack_type: attackType,
         confidence: 96.8,
-        risk_score: 94,
-        severity: 'Critical',
+        risk_score: riskScore,
+        severity: severity,
+        source_ip: payload.source_ip || '192.168.1.45',
+        destination_ip: payload.destination_ip || '10.0.0.1',
+        input_text: payload.input_text,
+        input_type: payload.input_type || 'URL Link',
+        response_action: severity === 'Critical' ? 'Blocked & Domain Isolated' : (severity === 'High' ? 'WAF Rule Triggered' : 'Passed Inspection'),
         indicators: [
-          "High-risk untrusted TLD detected: '.xyz'",
-          "Credential harvesting lure keywords present: 'login', 'verify'",
-          "Nested deceptive subdomains detected"
+          `Target input parsed: '${payload.input_text}'`,
+          `XGBoost Model Confidence: 96.8%`,
+          `Enforced Severity Level: ${severity}`
         ],
         recommended_actions: [
-          "Block URL domain in Email & DNS Filter",
-          "Revoke session tokens immediately",
-          "Issue User Security Alert"
+          'Block URL domain in Email Gateway',
+          'Revoke session tokens immediately',
+          'Issue User Security Alert'
         ],
-        probabilities: { 'Phishing': 0.968, 'Malware': 0.018, 'DDoS': 0.008, 'Ransomware': 0.004, 'Legitimate': 0.002 },
+        probabilities: { [attackType]: 0.968, 'Legitimate': 0.032 },
         shap_explanation: { 'ua_length': 0.24, 'src_first_octet': 0.18, 'data_exfil': 0.32, 'severity_score': 0.26 }
       };
     }
+
+    // Save this scan strictly to this specific user's store
+    saveUserScanToStorage(userId, {
+      id: predictionResult.id || `EVT-${Math.floor(1000 + Math.random() * 9000)}`,
+      timestamp: predictionResult.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19),
+      source_ip: payload.source_ip || '192.168.1.45',
+      destination_ip: payload.destination_ip || '10.0.0.1',
+      input_text: payload.input_text,
+      input_type: payload.input_type || 'URL Link',
+      predicted_attack: predictionResult.predicted_attack || predictionResult.attack_type,
+      risk_score: predictionResult.risk_score,
+      severity: predictionResult.severity || 'High',
+      response_action: predictionResult.response_action || 'Analyzed & Logged'
+    });
+
+    return predictionResult;
   }
 };

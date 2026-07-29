@@ -5,22 +5,26 @@ import ThreatTable from '../components/ThreatTable';
 import ThreatMap from '../components/ThreatMap';
 import ActivityFeed from '../components/ActivityFeed';
 import { mockDataService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { Shield, Zap, RefreshCw, FileText, Download, Sliders, Radio } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Dashboard({ onSelectLog }) {
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const userId = user?.user_id || 1;
+
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [userId]);
 
   const loadDashboardData = async () => {
     setLoading(true);
-    const statRes = await mockDataService.getDashboardStats();
-    const logRes = await mockDataService.getThreatLogs();
+    const statRes = await mockDataService.getDashboardStats(userId);
+    const logRes = await mockDataService.getThreatLogs(userId);
     setStats(statRes);
     setLogs(logRes.items || []);
     setLoading(false);
@@ -63,10 +67,10 @@ export default function Dashboard({ onSelectLog }) {
             </span>
           </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>
-            Enterprise Security Operations Center (SOC)
+            Welcome Back, <span className="glow-cyan">{user?.name || 'SOC Analyst'}</span>
           </h2>
           <p style={{ fontSize: '0.84rem', color: '#cbd5e1', marginTop: '4px' }}>
-            Real-time cyber telemetry, automated XGBoost threat neutralization, and SHAP explainability.
+            Real-time cyber telemetry, automated XGBoost threat neutralization, and user-isolated session logs.
           </p>
         </div>
 
@@ -87,7 +91,7 @@ export default function Dashboard({ onSelectLog }) {
               gap: '8px'
             }}
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Stream
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Session
           </button>
         </div>
       </motion.div>

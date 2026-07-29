@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { mockDataService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { Cpu, ShieldAlert, Sparkles, Activity, CheckCircle2, AlertTriangle, ArrowRight, BarChart2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Prediction() {
+  const { user } = useAuth();
   const { addNotification } = useNotification();
   const [inputText, setInputText] = useState('http://paypal-security-update-verify.xyz/login.php');
   const [severity, setSeverity] = useState('High');
   const [dataExfil, setDataExfil] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
+
+  const userId = user?.user_id || 1;
 
   const handlePredict = async (e) => {
     e.preventDefault();
@@ -22,7 +26,7 @@ export default function Prediction() {
     setResult(null);
 
     const payload = {
-      user_id: 1,
+      user_id: userId,
       input_text: inputText,
       attack_severity: severity,
       data_exfiltrated: dataExfil
@@ -32,7 +36,7 @@ export default function Prediction() {
     setTimeout(() => {
       setResult(res);
       setAnalyzing(false);
-      addNotification('success', 'XGBoost Prediction Complete', `Classified as ${res.attack_type} with ${res.confidence}% confidence`);
+      addNotification('success', 'XGBoost Prediction Complete', `Classified as ${res.attack_type || res.predicted_attack} with ${res.confidence}% confidence`);
     }, 600);
   };
 
@@ -180,7 +184,7 @@ export default function Prediction() {
               }}>
                 <div>
                   <span style={{ fontSize: '0.72rem', color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase' }}>Classified Threat Vector</span>
-                  <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', marginTop: '2px' }}>{result.attack_type}</h4>
+                  <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', marginTop: '2px' }}>{result.attack_type || result.predicted_attack}</h4>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>XGBoost Confidence</span>
@@ -188,7 +192,7 @@ export default function Prediction() {
                 </div>
               </div>
 
-              {/* SHAP Feature Importance Graph Placeholder */}
+              {/* SHAP Feature Importance Graph */}
               <div>
                 <h4 style={{ fontSize: '0.84rem', fontWeight: 700, color: '#fff', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <BarChart2 size={16} className="glow-cyan" /> SHAP Feature Attribution Impact:

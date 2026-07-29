@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Zap, Cpu, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { mockDataService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { motion } from 'framer-motion';
 
 export default function ThreatDetection() {
+  const { user } = useAuth();
   const { addNotification } = useNotification();
   const [inputUrl, setInputUrl] = useState('http://malware-drop.cc/urgent_invoice.exe');
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
+
+  const userId = user?.user_id || 1;
 
   const handleScan = async (e) => {
     e.preventDefault();
@@ -16,11 +20,11 @@ export default function ThreatDetection() {
     setScanning(true);
     setResult(null);
 
-    const res = await mockDataService.predictThreat({ input_text: inputUrl, attack_severity: 'Critical' });
+    const res = await mockDataService.predictThreat({ user_id: userId, input_text: inputUrl, attack_severity: 'Critical' });
     setTimeout(() => {
       setResult(res);
       setScanning(false);
-      addNotification('success', 'Threat Analyzed', `Result: ${res.attack_type} (${res.confidence}% confidence)`);
+      addNotification('success', 'Threat Analyzed', `Result: ${res.attack_type || res.predicted_attack} (${res.confidence}% confidence)`);
     }, 500);
   };
 
@@ -80,7 +84,7 @@ export default function ThreatDetection() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Classified Threat Category</span>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ef4444' }}>{result.attack_type}</h3>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ef4444' }}>{result.attack_type || result.predicted_attack}</h3>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Confidence Score</span>
