@@ -6,6 +6,17 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { motion } from 'framer-motion';
 
+const threatThemeMap = {
+  'Phishing': { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.4)', textLight: '#fcd34d' },
+  'Malware': { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.4)', textLight: '#fca5a5' },
+  'Executable Malware Binary': { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.4)', textLight: '#fca5a5' },
+  'DDoS': { color: '#a855f7', bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.4)', textLight: '#c084fc' },
+  'SQL Injection': { color: '#38bdf8', bg: 'rgba(56,189,248,0.12)', border: 'rgba(56,189,248,0.4)', textLight: '#7dd3fc' },
+  'Ransomware': { color: '#ec4899', bg: 'rgba(236,72,153,0.12)', border: 'rgba(236,72,153,0.4)', textLight: '#f472b6' },
+  'Safe / Legitimate Link': { color: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.4)', textLight: '#6ee7b7' },
+  'Clean & Verified File': { color: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.4)', textLight: '#6ee7b7' }
+};
+
 export default function ThreatDetection({ onSelectLog }) {
   const { user } = useAuth();
   const { addNotification } = useNotification();
@@ -44,6 +55,11 @@ export default function ThreatDetection({ onSelectLog }) {
       );
     }, 500);
   };
+
+  const attackCategory = result ? (result.attack_type || result.predicted_attack || 'Malware') : '';
+  const theme = threatThemeMap[attackCategory] || (result && (result.severity === 'Low' || attackCategory.includes('Safe'))
+    ? threatThemeMap['Safe / Legitimate Link']
+    : threatThemeMap['Malware']);
 
   const isSafeResult = result && ((result.attack_type || '').includes('Safe') || result.severity === 'Low');
 
@@ -101,26 +117,26 @@ export default function ThreatDetection({ onSelectLog }) {
         {result && (
           <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} style={{
             marginTop: '24px',
-            background: isSafeResult ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-            border: `1px solid ${isSafeResult ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
+            background: theme.bg,
+            border: `1px solid ${theme.border}`,
             borderRadius: '14px',
             padding: '20px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {isSafeResult ? <ShieldCheck size={28} style={{ color: '#10b981' }} /> : <ShieldAlert size={28} style={{ color: '#ef4444' }} />}
+                {isSafeResult ? <ShieldCheck size={28} style={{ color: theme.color }} /> : <ShieldAlert size={28} style={{ color: theme.color }} />}
                 <div>
-                  <span style={{ fontSize: '0.74rem', color: isSafeResult ? '#6ee7b7' : '#fca5a5' }}>
+                  <span style={{ fontSize: '0.74rem', color: theme.textLight, fontWeight: 700, textTransform: 'uppercase' }}>
                     {isSafeResult ? 'Security Inspection Result' : 'Classified Threat Category'}
                   </span>
-                  <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: isSafeResult ? '#10b981' : '#ef4444' }}>
-                    {result.attack_type || result.predicted_attack}
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: theme.color }}>
+                    {attackCategory}
                   </h3>
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Confidence Score</span>
-                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: isSafeResult ? '#10b981' : '#38bdf8' }}>{result.confidence}%</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: theme.color }}>{result.confidence}%</div>
               </div>
             </div>
 
@@ -136,13 +152,13 @@ export default function ThreatDetection({ onSelectLog }) {
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {result.recommended_actions?.map((act, idx) => (
                   <span key={idx} style={{
-                    background: isSafeResult ? 'rgba(16,185,129,0.15)' : 'rgba(56,189,248,0.15)',
-                    color: isSafeResult ? '#10b981' : '#38bdf8',
+                    background: theme.bg,
+                    color: theme.color,
                     padding: '4px 10px',
                     borderRadius: '6px',
                     fontSize: '0.74rem',
                     fontWeight: 700,
-                    border: `1px solid ${isSafeResult ? 'rgba(16,185,129,0.3)' : 'rgba(56,189,248,0.3)'}`
+                    border: `1px solid ${theme.border}`
                   }}>
                     {act}
                   </span>

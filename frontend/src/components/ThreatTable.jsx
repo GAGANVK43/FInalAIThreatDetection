@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight, ShieldAlert, AlertCircle, Eye, ShieldCheck, Zap } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Eye, ShieldCheck, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+const categoryStyleMap = {
+  'Phishing': { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.35)' },
+  'Malware': { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.35)' },
+  'Executable Malware Binary': { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.35)' },
+  'DDoS': { color: '#a855f7', bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)' },
+  'SQL Injection': { color: '#38bdf8', bg: 'rgba(56,189,248,0.15)', border: 'rgba(56,189,248,0.35)' },
+  'Ransomware': { color: '#ec4899', bg: 'rgba(236,72,153,0.15)', border: 'rgba(236,72,153,0.35)' },
+  'Safe / Legitimate Link': { color: '#10b981', bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.35)' },
+  'Clean & Verified File': { color: '#10b981', bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.35)' },
+};
 
 export default function ThreatTable({ logs = [], onSelectLog }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -8,7 +19,6 @@ export default function ThreatTable({ logs = [], onSelectLog }) {
   const [page, setPage] = useState(1);
   const itemsPerPage = 8;
 
-  // Filter ONLY the logs passed for this user session
   const filteredLogs = logs.filter(log => {
     const srcIp = log.source_ip || '';
     const attack = log.predicted_attack || log.attack_type || '';
@@ -56,7 +66,7 @@ export default function ThreatTable({ logs = [], onSelectLog }) {
             value={severityFilter}
             onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}
             style={{
-              background: 'rgba(8,12,20,0.9)',
+              background: '#0d1321',
               border: '1px solid var(--border-cyan)',
               color: '#fff',
               padding: '6px 12px',
@@ -65,18 +75,17 @@ export default function ThreatTable({ logs = [], onSelectLog }) {
               outline: 'none'
             }}
           >
-            <option value="All">All Severity</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
+            <option value="All" style={{ background: '#0d1321', color: '#fff' }}>All Severity</option>
+            <option value="Critical" style={{ background: '#0d1321', color: '#ef4444' }}>Critical</option>
+            <option value="High" style={{ background: '#0d1321', color: '#f59e0b' }}>High</option>
+            <option value="Medium" style={{ background: '#0d1321', color: '#eab308' }}>Medium</option>
+            <option value="Low" style={{ background: '#0d1321', color: '#10b981' }}>Low</option>
           </select>
         </div>
       </div>
 
-      {/* Fresh Start Empty State vs Table View */}
       {displayedLogs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '50px 20px', background: 'rgba(8,12,20,0.6)', borderRadius: '12px', border: '1px border-cyan' }}>
+        <div style={{ textAlign: 'center', padding: '50px 20px', background: 'rgba(8,12,20,0.6)', borderRadius: '12px', border: '1px solid var(--border-cyan)' }}>
           <ShieldCheck size={48} className="glow-cyan" style={{ margin: '0 auto 12px' }} />
           <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>No Threat Scans Recorded Yet</h4>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '420px', margin: '6px auto 16px' }}>
@@ -109,7 +118,10 @@ export default function ThreatTable({ logs = [], onSelectLog }) {
               </thead>
               <tbody>
                 {displayedLogs.map((log) => {
+                  const attackCategory = log.predicted_attack || log.attack_type || 'Malware';
+                  const catStyle = categoryStyleMap[attackCategory] || { color: '#38bdf8', bg: 'rgba(56,189,248,0.15)', border: 'rgba(56,189,248,0.35)' };
                   const sevClass = (log.severity || 'Low').toLowerCase();
+
                   return (
                     <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.2s' }}>
                       <td className="font-mono" style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>{log.id}</td>
@@ -118,12 +130,25 @@ export default function ThreatTable({ logs = [], onSelectLog }) {
                       <td className="font-mono" style={{ padding: '12px 14px', color: '#fff', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.input_text}>
                         {log.input_text}
                       </td>
-                      <td style={{ padding: '12px 14px', fontWeight: 700, color: '#fff' }}>{log.predicted_attack || log.attack_type}</td>
                       <td style={{ padding: '12px 14px' }}>
                         <span style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          padding: '3px 10px',
+                          borderRadius: '8px',
+                          fontSize: '0.74rem',
+                          fontWeight: 800,
+                          color: catStyle.color,
+                          background: catStyle.bg,
+                          border: `1px solid ${catStyle.border}`
+                        }}>
+                          {attackCategory}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
                           padding: '3px 8px',
                           borderRadius: '12px',
                           fontSize: '0.72rem',
