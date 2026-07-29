@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar, Legend
 } from 'recharts';
-import { Activity, PieChart as PieIcon, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Activity, PieChart as PieIcon, TrendingUp } from 'lucide-react';
 
 const categoryColorMap = {
   'DDoS': '#ef4444',
@@ -11,12 +11,11 @@ const categoryColorMap = {
   'Malware': '#a855f7',
   'Ransomware': '#ec4899',
   'SQL Injection': '#38bdf8',
-  'Legitimate Link': '#10b981',
+  'Safe / Legitimate Link': '#10b981',
   'Clean URL': '#10b981'
 };
 
 export function ThreatTimelineChart({ logs = [] }) {
-  // Compute time bucket distribution from actual user logs
   const timelineMap = {
     '00:00': 0, '04:00': 0, '08:00': 0, '12:00': 0, '16:00': 0, '20:00': 0
   };
@@ -53,7 +52,7 @@ export function ThreatTimelineChart({ logs = [] }) {
         {logs.length === 0 ? (
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
             <Activity size={40} style={{ opacity: 0.3, marginBottom: '8px' }} />
-            <span style={{ fontSize: '0.82rem' }}>Timeline timeline will render when you scan payloads</span>
+            <span style={{ fontSize: '0.82rem' }}>Timeline will render when you scan payloads</span>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -67,7 +66,11 @@ export function ThreatTimelineChart({ logs = [] }) {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} allowDecimals={false} />
-              <Tooltip contentStyle={{ background: '#0d1321', borderColor: 'rgba(56,189,248,0.3)', borderRadius: '10px' }} />
+              <Tooltip
+                contentStyle={{ background: '#0d1321', borderColor: 'rgba(56,189,248,0.4)', borderRadius: '10px', color: '#fff' }}
+                itemStyle={{ color: '#38bdf8', fontWeight: 700 }}
+                labelStyle={{ color: '#fff', fontWeight: 700 }}
+              />
               <Area type="monotone" dataKey="Scans" stroke="#38bdf8" fillOpacity={1} fill="url(#colorScans)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -124,7 +127,11 @@ export function AttackCategoryDonutChart({ logs = [] }) {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ background: '#0d1321', borderColor: 'rgba(56,189,248,0.3)', borderRadius: '10px' }} />
+              <Tooltip
+                contentStyle={{ background: '#0d1321', borderColor: 'rgba(56,189,248,0.4)', borderRadius: '10px', color: '#fff' }}
+                itemStyle={{ color: '#38bdf8', fontWeight: 700 }}
+                labelStyle={{ color: '#fff', fontWeight: 700 }}
+              />
             </PieChart>
           </ResponsiveContainer>
         )}
@@ -136,8 +143,8 @@ export function AttackCategoryDonutChart({ logs = [] }) {
 export function WeeklyTrendBarChart({ logs = [] }) {
   const dayCounts = { 'Mon': 0, 'Tue': 0, 'Wed': 0, 'Thu': 0, 'Fri': 0, 'Sat': 0, 'Sun': 0 };
 
-  logs.forEach(log => {
-    dayCounts['Wed']++; // Increment active scan count
+  logs.forEach(() => {
+    dayCounts['Wed']++;
   });
 
   const weeklyData = Object.entries(dayCounts).map(([day, count]) => ({
@@ -167,7 +174,11 @@ export function WeeklyTrendBarChart({ logs = [] }) {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis dataKey="day" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} allowDecimals={false} />
-              <Tooltip contentStyle={{ background: '#0d1321', borderColor: 'rgba(56,189,248,0.3)', borderRadius: '10px' }} />
+              <Tooltip
+                contentStyle={{ background: '#0d1321', borderColor: 'rgba(56,189,248,0.4)', borderRadius: '10px', color: '#fff' }}
+                itemStyle={{ color: '#38bdf8', fontWeight: 700 }}
+                labelStyle={{ color: '#fff', fontWeight: 700 }}
+              />
               <Legend />
               <Bar dataKey="Events" fill="#0284c7" radius={[6, 6, 0, 0]} />
               <Bar dataKey="Mitigated" fill="#10b981" radius={[6, 6, 0, 0]} />

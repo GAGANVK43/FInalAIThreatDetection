@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Zap, Cpu, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Zap } from 'lucide-react';
 import { mockDataService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 export default function ThreatDetection() {
   const { user } = useAuth();
   const { addNotification } = useNotification();
-  const [inputUrl, setInputUrl] = useState('http://malware-drop.cc/urgent_invoice.exe');
+  const [inputUrl, setInputUrl] = useState('https://www.google.com/');
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -24,9 +24,16 @@ export default function ThreatDetection() {
     setTimeout(() => {
       setResult(res);
       setScanning(false);
-      addNotification('success', 'Threat Analyzed', `Result: ${res.attack_type || res.predicted_attack} (${res.confidence}% confidence)`);
+      const isSafe = (res.attack_type || '').includes('Safe') || res.severity === 'Low';
+      addNotification(
+        isSafe ? 'info' : 'success',
+        isSafe ? 'Payload Verified Safe' : 'Threat Analyzed',
+        `Result: ${res.attack_type || res.predicted_attack} (${res.confidence}% confidence)`
+      );
     }, 500);
   };
+
+  const isSafeResult = result && ((result.attack_type || '').includes('Safe') || result.severity === 'Low');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -80,15 +87,28 @@ export default function ThreatDetection() {
         </form>
 
         {result && (
-          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '24px', background: 'rgba(8,12,20,0.8)', border: '1px solid var(--border-cyan)', borderRadius: '14px', padding: '20px' }}>
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} style={{
+            marginTop: '24px',
+            background: isSafeResult ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+            border: `1px solid ${isSafeResult ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
+            borderRadius: '14px',
+            padding: '20px'
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Classified Threat Category</span>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ef4444' }}>{result.attack_type || result.predicted_attack}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {isSafeResult ? <ShieldCheck size={28} style={{ color: '#10b981' }} /> : <ShieldAlert size={28} style={{ color: '#ef4444' }} />}
+                <div>
+                  <span style={{ fontSize: '0.74rem', color: isSafeResult ? '#6ee7b7' : '#fca5a5' }}>
+                    {isSafeResult ? 'Security Inspection Result' : 'Classified Threat Category'}
+                  </span>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: isSafeResult ? '#10b981' : '#ef4444' }}>
+                    {result.attack_type || result.predicted_attack}
+                  </h3>
+                </div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Confidence Score</span>
-                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#38bdf8' }}>{result.confidence}%</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: isSafeResult ? '#10b981' : '#38bdf8' }}>{result.confidence}%</div>
               </div>
             </div>
 
@@ -103,7 +123,15 @@ export default function ThreatDetection() {
               <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff', marginBottom: '6px' }}>Enforced SOC Protocol:</h4>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {result.recommended_actions?.map((act, idx) => (
-                  <span key={idx} style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', padding: '4px 10px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 700, border: '1px solid rgba(56,189,248,0.3)' }}>
+                  <span key={idx} style={{
+                    background: isSafeResult ? 'rgba(16,185,129,0.15)' : 'rgba(56,189,248,0.15)',
+                    color: isSafeResult ? '#10b981' : '#38bdf8',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    border: `1px solid ${isSafeResult ? 'rgba(16,185,129,0.3)' : 'rgba(56,189,248,0.3)'}`
+                  }}>
                     {act}
                   </span>
                 ))}

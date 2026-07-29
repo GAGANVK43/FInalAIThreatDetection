@@ -2,15 +2,15 @@ import React, { useState } from 'react';
 import { mockDataService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Cpu, ShieldAlert, Sparkles, Activity, CheckCircle2, AlertTriangle, ArrowRight, BarChart2 } from 'lucide-react';
+import { Cpu, Sparkles, BarChart2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Prediction() {
   const { user } = useAuth();
   const { addNotification } = useNotification();
-  const [inputText, setInputText] = useState('http://paypal-security-update-verify.xyz/login.php');
-  const [severity, setSeverity] = useState('High');
-  const [dataExfil, setDataExfil] = useState(true);
+  const [inputText, setInputText] = useState('https://www.google.com/');
+  const [severity, setSeverity] = useState('Low');
+  const [dataExfil, setDataExfil] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -36,9 +36,12 @@ export default function Prediction() {
     setTimeout(() => {
       setResult(res);
       setAnalyzing(false);
+      const isSafe = (res.attack_type || '').includes('Safe') || res.severity === 'Low';
       addNotification('success', 'XGBoost Prediction Complete', `Classified as ${res.attack_type || res.predicted_attack} with ${res.confidence}% confidence`);
     }, 600);
   };
+
+  const isSafeResult = result && ((result.attack_type || '').includes('Safe') || result.severity === 'Low');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -71,7 +74,7 @@ export default function Prediction() {
                 rows={4}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Enter suspicious link e.g. http://paypal-verify-login.xyz/..."
+                placeholder="Enter link or payload e.g. https://www.google.com/..."
                 style={{
                   width: '100%',
                   background: 'rgba(8,12,20,0.9)',
@@ -96,7 +99,7 @@ export default function Prediction() {
                   onChange={(e) => setSeverity(e.target.value)}
                   style={{
                     width: '100%',
-                    background: 'rgba(8,12,20,0.9)',
+                    background: '#0d1321',
                     border: '1px solid var(--border-cyan)',
                     color: '#fff',
                     padding: '8px 12px',
@@ -121,7 +124,7 @@ export default function Prediction() {
                   onChange={(e) => setDataExfil(e.target.value === 'True')}
                   style={{
                     width: '100%',
-                    background: 'rgba(8,12,20,0.9)',
+                    background: '#0d1321',
                     border: '1px solid var(--border-cyan)',
                     color: '#fff',
                     padding: '8px 12px',
@@ -130,8 +133,8 @@ export default function Prediction() {
                     outline: 'none'
                   }}
                 >
-                  <option value="True">Yes (Exfiltration Suspicious)</option>
                   <option value="False">No (Standard Traffic)</option>
+                  <option value="True">Yes (Exfiltration Suspicious)</option>
                 </select>
               </div>
             </div>
@@ -174,21 +177,28 @@ export default function Prediction() {
               
               {/* Category & Confidence */}
               <div style={{
-                background: 'rgba(239,68,68,0.12)',
-                border: '1px solid rgba(239,68,68,0.4)',
+                background: isSafeResult ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                border: `1px solid ${isSafeResult ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
                 borderRadius: '14px',
                 padding: '16px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center'
               }}>
-                <div>
-                  <span style={{ fontSize: '0.72rem', color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase' }}>Classified Threat Vector</span>
-                  <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', marginTop: '2px' }}>{result.attack_type || result.predicted_attack}</h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {isSafeResult ? <ShieldCheck size={28} style={{ color: '#10b981' }} /> : <ShieldAlert size={28} style={{ color: '#ef4444' }} />}
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: isSafeResult ? '#6ee7b7' : '#fca5a5', fontWeight: 700, textTransform: 'uppercase' }}>
+                      {isSafeResult ? 'Security Inspection Result' : 'Classified Threat Vector'}
+                    </span>
+                    <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: isSafeResult ? '#10b981' : '#fff', marginTop: '2px' }}>
+                      {result.attack_type || result.predicted_attack}
+                    </h4>
+                  </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>XGBoost Confidence</span>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#38bdf8' }} className="font-mono">{result.confidence}%</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: isSafeResult ? '#10b981' : '#38bdf8' }} className="font-mono">{result.confidence}%</div>
                 </div>
               </div>
 
@@ -202,10 +212,15 @@ export default function Prediction() {
                     <div key={idx}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', marginBottom: '3px' }}>
                         <span className="font-mono" style={{ color: '#cbd5e1' }}>{feat}</span>
-                        <span className="font-mono" style={{ color: '#38bdf8', fontWeight: 700 }}>+{score}</span>
+                        <span className="font-mono" style={{ color: isSafeResult ? '#10b981' : '#38bdf8', fontWeight: 700 }}>+{score}</span>
                       </div>
                       <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, score * 200)}%`, height: '100%', background: 'linear-gradient(90deg, #0284c7, #38bdf8)', borderRadius: '3px' }} />
+                        <div style={{
+                          width: `${Math.min(100, score * 200)}%`,
+                          height: '100%',
+                          background: isSafeResult ? 'linear-gradient(90deg, #059669, #10b981)' : 'linear-gradient(90deg, #0284c7, #38bdf8)',
+                          borderRadius: '3px'
+                        }} />
                       </div>
                     </div>
                   ))}
