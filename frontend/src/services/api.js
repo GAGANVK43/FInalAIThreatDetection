@@ -23,7 +23,7 @@ apiClient.interceptors.request.use((config) => {
   return config;
 }, (error) => Promise.reject(error));
 
-// Local Storage Helper for User-Specific Fresh Starts & Real-time Scans
+// Local Storage Helper for User-Specific Scans & Session Telemetry
 const getUserScansFromStorage = (userId) => {
   try {
     const key = `user_scans_${userId || 'guest'}`;
@@ -38,7 +38,9 @@ const saveUserScanToStorage = (userId, scanItem) => {
   try {
     const key = `user_scans_${userId || 'guest'}`;
     const existing = getUserScansFromStorage(userId);
-    const updated = [scanItem, ...existing];
+    // Prevent exact duplicate ID entries
+    const filtered = existing.filter(item => item.id !== scanItem.id && item.timestamp !== scanItem.timestamp);
+    const updated = [scanItem, ...filtered];
     localStorage.setItem(key, JSON.stringify(updated));
     return updated;
   } catch (e) {
@@ -50,74 +52,95 @@ const SAFE_DOMAINS = ['google.com', 'google.co.in', 'github.com', 'microsoft.com
 
 export const mockDataService = {
   getDashboardStats: async (userId = 1) => {
+    const scans = getUserScansFromStorage(userId);
+
     try {
       const res = await apiClient.get(`/api/user/stats?user_id=${userId}`);
-      return res.data;
-    } catch (e) {
-      const scans = getUserScansFromStorage(userId);
-      const total = scans.length;
-      if (total === 0) {
-        return {
-          total_events: 0,
-          active_threats: 0,
-          blocked_threats: 0,
-          critical_alerts: 0,
-          ai_security_score: 100,
-          ai_confidence: 98.4,
-          exfil_rate_pct: 0,
-          attack_distribution: {},
-          severity_distribution: {}
-        };
+      if (res.data && res.data.total_events > 0) {
+        return res.data;
       }
+    } catch (e) {
+      // Ignore network fallback error and use local storage calculation
+    }
 
-      const critical = scans.filter(s => s.severity === 'Critical').length;
-      const blocked = scans.filter(s => s.risk_score > 50).length;
-      const attackDist = {};
-      scans.forEach(s => {
-        const cat = s.predicted_attack || s.attack_type || 'Unknown';
-        attackDist[cat] = (attackDist[cat] || 0) + 1;
-      });
-
+    // Compute strictly from this specific user's scan history
+    const total = scans.length;
+    if (total === 0) {
       return {
-        total_events: total,
-        active_threats: critical,
-        blocked_threats: blocked,
-        critical_alerts: critical,
-        ai_security_score: Math.max(10, 100 - (critical * 15)),
+        total_events: 0,
+        active_threats: 0,
+        blocked_threats: 0,
+        critical_alerts: 0,
+        ai_security_score: 100,
         ai_confidence: 98.4,
-        exfil_rate_pct: total > 0 ? Math.round((blocked / total) * 100) : 0,
-        attack_distribution: attackDist,
+        exfil_rate_pct: 0,
+        attack_distribution: {},
         severity_distribution: {}
       };
     }
+
+    const critical = scans.filter(s => (s.severity || '').toLowerCase() === 'critical').length;
+    const blocked = scans.filter(s => (s.risk_score || 0) > 50).length;
+    const attackDist = {};
+    scans.forEach(s => {
+      const cat = s.predicted_attack || s.attack_type || 'Unknown';
+      attackDist[cat] = (attackDist[cat] || 0) + 1;
+    });
+
+    return {
+      total_events: total,
+      active_threats: critical,
+      blocked_threats: blocked,
+      critical_alerts: critical,
+      ai_security_score: Math.max(10, 100 - (critical * 15)),
+      ai_confidence: 98.4,
+      exfil_rate_pct: total > 0 ? Math.round((blocked / total) * 100) : 0,
+      attack_distribution: attackDist,
+      severity_distribution: {}
+    };
   },
 
   getThreatLogs: async (userId = 1, page = 1, severity = 'All', search = '') => {
+    const localScans = getUserScansFromStorage(userId);
+
     try {
       const res = await apiClient.get(`/api/user/logs?user_id=${userId}&page=${page}&limit=10`);
-      if (res.data && Array.isArray(res.data.items)) {
-        return res.data;
+      if (res.data && Array.isArray(res.data.items) && res.data.items.length > 0) {
+        // Merge backend items and local items to guarantee zero missing entries
+        const combined = [...res.data.items];
+        localScans.forEach(ls => {
+          if (!combined.some(b => b.id === ls.id || b.input_text === ls.input_text)) {
+            combined.unshift(ls);
+          }
+        });
+        return {
+          items: combined,
+          total: combined.length,
+          page: 1,
+          pages: Math.ceil(combined.length / 10) || 1
+        };
       }
-      return { items: [], total: 0, page: 1, pages: 1 };
     } catch (e) {
-      const userScans = getUserScansFromStorage(userId);
-      return {
-        items: userScans,
-        total: userScans.length,
-        page: 1,
-        pages: Math.ceil(userScans.length / 10) || 1
-      };
+      // Network fallback
     }
+
+    return {
+      items: localScans,
+      total: localScans.length,
+      page: 1,
+      pages: Math.ceil(localScans.length / 10) || 1
+    };
   },
 
   predictThreat: async (payload) => {
     const userId = payload.user_id || 1;
-    let predictionResult;
+    let predictionResult = null;
 
     try {
       const res = await apiClient.post('/predict', payload);
       predictionResult = res.data;
     } catch (e) {
+      // Local Heuristics & XGBoost Rule Fallback
       const inputText = (payload.input_text || '').toLowerCase();
       const isSafeDomain = SAFE_DOMAINS.some(d => inputText.includes(d));
       const hasThreat = ['select', 'drop', 'union', 'exe', 'malware', 'invoice', 'login', 'verify', 'flood', 'c2'].some(k => inputText.includes(k));
@@ -189,18 +212,22 @@ export const mockDataService = {
       };
     }
 
-    saveUserScanToStorage(userId, {
+    // MANDATORY GUARANTEE: Save scan record into local user storage ALWAYS
+    const scanItem = {
       id: predictionResult.id || `EVT-${Math.floor(1000 + Math.random() * 9000)}`,
       timestamp: predictionResult.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19),
       source_ip: payload.source_ip || '192.168.1.45',
       destination_ip: payload.destination_ip || '10.0.0.1',
       input_text: payload.input_text,
       input_type: payload.input_type || 'URL Link',
-      predicted_attack: predictionResult.predicted_attack || predictionResult.attack_type,
-      risk_score: predictionResult.risk_score,
+      predicted_attack: predictionResult.predicted_attack || predictionResult.attack_type || 'Malware',
+      attack_type: predictionResult.attack_type || predictionResult.predicted_attack || 'Malware',
+      risk_score: predictionResult.risk_score || 85,
       severity: predictionResult.severity || 'High',
-      response_action: predictionResult.response_action || 'Analyzed & Logged'
-    });
+      response_action: predictionResult.response_action || (predictionResult.severity === 'Critical' ? 'Blocked & Domain Isolated' : 'Logged & Mitigated')
+    };
+
+    saveUserScanToStorage(userId, scanItem);
 
     return predictionResult;
   }
