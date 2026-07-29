@@ -1,44 +1,50 @@
 import React from 'react';
-import { ShieldCheck, ShieldAlert, Cpu, DatabaseZap, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function StatsCards({ stats }) {
+  const totalEvents = stats?.total_events ?? 0;
+  const activeThreats = stats?.active_threats ?? 0;
+  const blockedThreats = stats?.blocked_threats ?? 0;
+  const securityScore = stats?.ai_security_score ?? 100;
+  const confidence = totalEvents > 0 ? (stats?.ai_confidence ?? 98.4) : 100;
+
   const cards = [
     {
       title: 'AI Security Shield Score',
-      value: `${stats?.ai_security_score || 94.8}%`,
-      sub: 'System-wide protection status',
+      value: `${securityScore}%`,
+      sub: totalEvents === 0 ? 'Fresh session - system fully secure' : 'User session security status',
       icon: ShieldCheck,
       color: '#10b981',
       bgGlow: 'rgba(16, 185, 129, 0.12)'
     },
     {
-      title: 'Total Ingested Threats',
-      value: (stats?.total_events || 124850).toLocaleString(),
-      sub: 'Ingested security logs & events',
+      title: 'Total Scanned Threats',
+      value: totalEvents.toLocaleString(),
+      sub: 'Threat payloads scanned by you',
       icon: ShieldAlert,
       color: '#38bdf8',
       bgGlow: 'rgba(56, 189, 248, 0.12)'
     },
     {
       title: 'Active Critical Alerts',
-      value: (stats?.active_threats || 42).toLocaleString(),
-      sub: 'Immediate SOC action required',
+      value: activeThreats.toLocaleString(),
+      sub: 'Critical threats identified',
       icon: AlertTriangle,
       color: '#ef4444',
       bgGlow: 'rgba(239, 68, 68, 0.12)'
     },
     {
       title: 'Blocked & Mitigated',
-      value: (stats?.blocked_threats || 119400).toLocaleString(),
-      sub: 'Neutralized by automated AI rules',
+      value: blockedThreats.toLocaleString(),
+      sub: 'Neutralized by automated rules',
       icon: CheckCircle2,
       color: '#10b981',
       bgGlow: 'rgba(16, 185, 129, 0.12)'
     },
     {
       title: 'AI Inference Confidence',
-      value: `${stats?.ai_confidence || 98.4}%`,
+      value: `${confidence}%`,
       sub: 'XGBoost multi-class accuracy',
       icon: Cpu,
       color: '#a855f7',

@@ -6,7 +6,7 @@ import ThreatMap from '../components/ThreatMap';
 import ActivityFeed from '../components/ActivityFeed';
 import { mockDataService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Zap, RefreshCw, FileText, Download, Sliders, Radio } from 'lucide-react';
+import { RefreshCw, Radio } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Dashboard({ onSelectLog }) {
@@ -99,16 +99,16 @@ export default function Dashboard({ onSelectLog }) {
       {/* KPI Stats Cards */}
       <StatsCards stats={stats} />
 
-      {/* Main Grid Section: Charts */}
+      {/* Main Grid Section: Charts strictly computed from user logs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
-        <ThreatTimelineChart />
-        <AttackCategoryDonutChart />
+        <ThreatTimelineChart logs={logs} />
+        <AttackCategoryDonutChart logs={logs} />
       </div>
 
-      {/* Map & Live Activity Ticker */}
+      {/* Map & Live Activity Ticker strictly computed from user logs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px' }}>
-        <ThreatMap />
-        <ActivityFeed />
+        <ThreatMap logs={logs} />
+        <ActivityFeed logs={logs} />
       </div>
 
       {/* High Density Threat Table Stream */}
