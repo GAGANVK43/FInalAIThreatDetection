@@ -1,9 +1,29 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ScanProgress from '../components/ScanProgress';
-import { ShieldCheck, Cpu, HardDrive, Network, Zap } from 'lucide-react';
-import { motion } from 'framer-motion';
+import ThreatTable from '../components/ThreatTable';
+import { Cpu, HardDrive, Network } from 'lucide-react';
+import { mockDataService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
-export default function ScanSystem() {
+export default function ScanSystem({ onSelectLog }) {
+  const { user } = useAuth();
+  const [logs, setLogs] = useState([]);
+
+  const userId = user?.user_id || 1;
+
+  useEffect(() => {
+    loadUserLogs();
+  }, [userId]);
+
+  const loadUserLogs = async () => {
+    const res = await mockDataService.getThreatLogs(userId);
+    setLogs(res.items || []);
+  };
+
+  const handleScanComplete = () => {
+    loadUserLogs();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -16,7 +36,7 @@ export default function ScanSystem() {
       </div>
 
       {/* Main Drag & Drop Sandbox Scanner */}
-      <ScanProgress />
+      <ScanProgress onScanComplete={handleScanComplete} />
 
       {/* Auxiliary Scanner Telemetry Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
@@ -61,6 +81,9 @@ export default function ScanSystem() {
         </div>
 
       </div>
+
+      {/* Scanned Files History Table */}
+      <ThreatTable logs={logs} onSelectLog={onSelectLog} />
 
     </div>
   );

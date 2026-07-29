@@ -1,18 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, Zap } from 'lucide-react';
+import ThreatTable from '../components/ThreatTable';
 import { mockDataService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { motion } from 'framer-motion';
 
-export default function ThreatDetection() {
+export default function ThreatDetection({ onSelectLog }) {
   const { user } = useAuth();
   const { addNotification } = useNotification();
-  const [inputUrl, setInputUrl] = useState('https://www.google.com/');
+  const [inputUrl, setInputUrl] = useState('http://paypal-verify-account.xyz/login.php');
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
+  const [logs, setLogs] = useState([]);
 
   const userId = user?.user_id || 1;
+
+  useEffect(() => {
+    loadLogs();
+  }, [userId]);
+
+  const loadLogs = async () => {
+    const res = await mockDataService.getThreatLogs(userId);
+    setLogs(res.items || []);
+  };
 
   const handleScan = async (e) => {
     e.preventDefault();
@@ -24,10 +35,11 @@ export default function ThreatDetection() {
     setTimeout(() => {
       setResult(res);
       setScanning(false);
+      loadLogs();
       const isSafe = (res.attack_type || '').includes('Safe') || res.severity === 'Low';
       addNotification(
         isSafe ? 'info' : 'success',
-        isSafe ? 'Payload Verified Safe' : 'Threat Analyzed',
+        isSafe ? 'Payload Verified Safe' : 'Threat Analyzed & Recorded',
         `Result: ${res.attack_type || res.predicted_attack} (${res.confidence}% confidence)`
       );
     }, 500);
@@ -140,6 +152,9 @@ export default function ThreatDetection() {
           </motion.div>
         )}
       </div>
+
+      {/* Scanned Threat Logs Table */}
+      <ThreatTable logs={logs} onSelectLog={onSelectLog} />
 
     </div>
   );
