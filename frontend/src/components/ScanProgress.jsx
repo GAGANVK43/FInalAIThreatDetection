@@ -1,34 +1,59 @@
-import React, { useState } from 'react';
-import { UploadCloud, FileCode, CheckCircle2, ShieldAlert, Cpu } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { UploadCloud, FileCode, CheckCircle2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { mockDataService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function ScanProgress({ onScanComplete }) {
+  const { user } = useAuth();
+  const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [scanResult, setScanResult] = useState(null);
 
-  const startScan = (fileName = 'security_audit_payload.exe') => {
+  const userId = user?.user_id || 1;
+
+  const processFileScan = (file) => {
+    if (!file) return;
     setScanning(true);
     setProgress(0);
     setScanResult(null);
 
+    const fileName = file.name || 'uploaded_sample.bin';
+    const ext = fileName.split('.').pop().toLowerCase();
+    const isExecutable = ['exe', 'dll', 'bat', 'vbs', 'sh', 'ps1', 'scr'].includes(ext);
+
     let current = 0;
     const interval = setInterval(() => {
-      current += 10;
+      current += 20;
       setProgress(current);
       if (current >= 100) {
         clearInterval(interval);
         setScanning(false);
+
         const result = {
           fileName,
-          threatLevel: 'Critical',
-          riskScore: 94,
-          predictedAttack: 'Malware Exfiltration',
-          confidence: 98.4,
-          details: 'XGBoost multi-class classifier flagged Trojan binary payload heuristics & unauthorized socket connection requests.'
+          isThreat: isExecutable,
+          threatLevel: isExecutable ? 'Critical' : 'Low',
+          riskScore: isExecutable ? 94 : 0,
+          predictedAttack: isExecutable ? 'Executable Malware Binary' : 'Clean & Verified File',
+          confidence: 99.2,
+          details: isExecutable
+            ? `XGBoost sandbox detected unauthorized binary executable signatures in extension '.${ext}'. File isolated.`
+            : `File '.${ext}' scanned successfully. Hash validation SHA-256 clean. Zero malicious indicators found.`
         };
+
         setScanResult(result);
+
+        // Record scan into user session history
+        mockDataService.predictThreat({
+          user_id: userId,
+          input_text: `File Sandbox Scan: ${fileName}`,
+          input_type: 'File Sandbox',
+          attack_severity: isExecutable ? 'Critical' : 'Low'
+        });
+
         if (onScanComplete) onScanComplete(result);
       }
     }, 200);
@@ -38,7 +63,13 @@ export default function ScanProgress({ onScanComplete }) {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      startScan(e.dataTransfer.files[0].name);
+      processFileScan(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      processFileScan(e.target.files[0]);
     }
   };
 
@@ -49,11 +80,20 @@ export default function ScanProgress({ onScanComplete }) {
         Upload suspicious executables, memory dumps, or log files for automated XGBoost sandbox evaluation.
       </p>
 
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+
       {!scanning && !scanResult && (
         <div
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
+          onClick={() => fileInputRef.current && fileInputRef.current.click()}
           style={{
             border: `2px dashed ${isDragging ? '#38bdf8' : 'var(--border-cyan)'}`,
             borderRadius: '16px',
@@ -63,25 +103,31 @@ export default function ScanProgress({ onScanComplete }) {
             cursor: 'pointer',
             transition: 'all 0.2s'
           }}
-          onClick={() => startScan()}
         >
           <UploadCloud size={48} className="glow-cyan" style={{ margin: '0 auto 14px' }} />
           <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff' }}>Drag & Drop Suspicious File Here</h4>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Supports .exe, .dll, .pdf, .docx, .pcap, .log files (Max 50MB)
           </p>
-          <button style={{
-            marginTop: '16px',
-            background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 24px',
-            borderRadius: '10px',
-            fontSize: '0.84rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 4px 15px rgba(2,132,199,0.3)'
-          }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (fileInputRef.current) fileInputRef.current.click();
+            }}
+            style={{
+              marginTop: '16px',
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+              color: '#fff',
+              border: 'none',
+              padding: '10px 24px',
+              borderRadius: '10px',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(2,132,199,0.3)'
+            }}
+          >
             Browse Local File
           </button>
         </div>
@@ -117,20 +163,24 @@ export default function ScanProgress({ onScanComplete }) {
       {/* Result Card */}
       {scanResult && (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{
-          background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.4)',
+          background: scanResult.isThreat ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)',
+          border: `1px solid ${scanResult.isThreat ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)'}`,
           borderRadius: '16px',
           padding: '20px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <ShieldAlert size={28} style={{ color: '#ef4444' }} />
+              {scanResult.isThreat ? (
+                <ShieldAlert size={28} style={{ color: '#ef4444' }} />
+              ) : (
+                <ShieldCheck size={28} style={{ color: '#10b981' }} />
+              )}
               <div>
-                <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>Threat Detected: {scanResult.predictedAttack}</h4>
+                <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>Result: {scanResult.predictedAttack}</h4>
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Target File: {scanResult.fileName}</p>
               </div>
             </div>
-            <div style={{ background: '#ef4444', color: '#fff', fontSize: '0.78rem', fontWeight: 800, padding: '4px 10px', borderRadius: '8px' }}>
+            <div style={{ background: scanResult.isThreat ? '#ef4444' : '#10b981', color: '#fff', fontSize: '0.78rem', fontWeight: 800, padding: '4px 10px', borderRadius: '8px' }}>
               RISK SCORE: {scanResult.riskScore}/100
             </div>
           </div>

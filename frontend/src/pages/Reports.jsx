@@ -1,18 +1,33 @@
 import React from 'react';
-import { FileText, Download, CheckCircle2, ShieldAlert, Calendar } from 'lucide-react';
+import { FileText, Download, Calendar } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Reports() {
   const { addNotification } = useNotification();
+  const { user } = useAuth();
 
   const reports = [
-    { title: 'SOC Executive Monthly Threat Audit Report (July 2026)', date: '2026-07-29', type: 'PDF Executive Summary', size: '4.2 MB' },
-    { title: 'XGBoost Model Performance & SHAP Evaluation Report', date: '2026-07-28', type: 'JSON & CSV Metrics Dump', size: '1.8 MB' },
-    { title: 'Incident Response & Mitigation Action Logs', date: '2026-07-25', type: 'CSV Export Audit', size: '12.4 MB' },
+    { title: 'SOC Executive Monthly Threat Audit Report (July 2026)', filename: 'SOC_Executive_Threat_Audit_Report.pdf', date: '2026-07-29', type: 'PDF Executive Summary', size: '4.2 MB' },
+    { title: 'XGBoost Model Performance & SHAP Evaluation Report', filename: 'XGBoost_Model_Metrics_Evaluation.csv', date: '2026-07-28', type: 'JSON & CSV Metrics Dump', size: '1.8 MB' },
+    { title: 'Incident Response & Mitigation Action Logs', filename: 'Incident_Response_Action_Logs.csv', date: '2026-07-25', type: 'CSV Export Audit', size: '12.4 MB' },
   ];
 
-  const handleDownload = (title) => {
-    addNotification('success', 'Download Started', `Downloading ${title}`);
+  const handleDownload = (rep) => {
+    addNotification('success', 'Download Started', `Downloading ${rep.filename}`);
+
+    // Generate real downloadable Blob content
+    const content = `=================================================================\nCYBERSHIELD AI - EXECUTIVE THREAT AUDIT REPORT\nReport Title: ${rep.title}\nDate: ${rep.date}\nGenerated For Analyst: ${user?.name || 'SOC Analyst'} (${user?.identifier || 'alex.mercer@cyberdefense.sec'})\nEngine: XGBoost Classifier v2.0 with SHAP Explainability\n=================================================================\n\nSUMMARY OF MITIGATION TELEMETRY:\n- Total Session Scans Inspected: 100%\n- Average Mitigation Accuracy: 98.4%\n- Enforced SOC Protocols: WAF Rule #408, IP Null-routing, Domain Isolation\n\n[End of Audit File]\n`;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = rep.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -42,12 +57,12 @@ export default function Reports() {
             </div>
 
             <button
-              onClick={() => handleDownload(rep.title)}
+              onClick={() => handleDownload(rep)}
               style={{
                 marginTop: '20px',
-                background: 'rgba(56,189,248,0.15)',
-                border: '1px solid rgba(56,189,248,0.3)',
-                color: '#38bdf8',
+                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                border: 'none',
+                color: '#fff',
                 padding: '10px',
                 borderRadius: '8px',
                 fontSize: '0.82rem',
@@ -56,10 +71,11 @@ export default function Reports() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                boxShadow: '0 4px 15px rgba(2,132,199,0.3)'
               }}
             >
-              <Download size={16} /> Download Report
+              <Download size={16} /> Download File
             </button>
           </div>
         ))}
